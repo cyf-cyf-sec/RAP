@@ -1,0 +1,236 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="hero">
+    <h2>AI-Generated Code Analysis Tool for Real-World Repositories</h2>
+    <p>Enter GitHub repository URL to export AI-generated code</p>
+</div>
+
+<div class="analysis-form">
+    <form id="crawlForm" method="POST" action="{{ url_for('main.submit_analysis') }}">
+        <div class="form-group">
+            <label for="repo_url">Repository URL: <span class="required">*</span></label>
+            <input type="url" id="repo_url" name="repo_url" 
+                   placeholder="https://github.com/username/repository" 
+                   required>
+            <div class="error-message" id="repo_url_error"></div>
+        </div>
+        
+        <div class="form-group">
+            <label for="github_token">GitHub Token:</label>
+            <input type="text" id="github_token" name="github_token" 
+                   placeholder="Optional, for private repos or higher API limits">
+            <div class="error-message" id="github_token_error"></div>
+        </div>
+        
+        <div class="form-row">
+            <div class="form-group">
+                <label for="start_date">Start Date:</label>
+                <input type="text" id="start_date" name="start_date" placeholder="yyyy-mm-dd" data-flatpickr>
+                <div class="error-message" id="start_date_error"></div>
+            </div>
+            <div class="form-group">
+                <label for="end_date">End Date:</label>
+                <input type="text" id="end_date" name="end_date" placeholder="yyyy-mm-dd" data-flatpickr>
+                <div class="error-message" id="end_date_error"></div>
+            </div>
+        </div>
+        
+        <div class="form-group">
+            <label for="thread_count">Thread Count:</label>
+            <input type="number" id="thread_count" name="thread_count" 
+                   min="1" max="8" placeholder="Default: 4">
+            <div class="error-message" id="thread_count_error"></div>
+        </div>
+        
+        <div class="form-group">
+            <label>Enable AI Code Generation:</label>
+            <div class="radio-group">
+                <label class="radio-label">
+                    <input type="radio" name="enable_codegen" value="yes"> Yes
+                </label>
+                <label class="radio-label">
+                    <input type="radio" name="enable_codegen" value="no" checked> No
+                </label>
+            </div>
+            <div class="error-message" id="enable_codegen_error"></div>
+        </div>
+        
+        <div class="form-group" id="codegen_options" style="display: none;">
+            <label for="codegen_provider">LLM Provider:</label>
+            <select id="codegen_provider" name="codegen_provider">
+                <option value="deepseek">DeepSeek</option>
+                <option value="zhipu">Zhipu</option>
+                <option value="dashscope">DashScope</option>
+            </select>
+            <div class="error-message" id="codegen_provider_error"></div>
+            
+            <label for="codegen_api_key" style="margin-top: 10px;">API Key:</label>
+            <input type="text" id="codegen_api_key" name="codegen_api_key" 
+                   placeholder="Enter your LLM API key">
+            <div class="error-message" id="codegen_api_key_error"></div>
+        </div>
+        
+        <div class="global-error-message" id="global_error"></div>
+        
+        <div class="form-actions">
+            <button type="submit" class="btn-primary" id="submit_btn">Start Analysis</button>
+        </div>
+    </form>
+</div>
+
+<div class="loading-container" id="loading_container">
+    <div class="spinner"></div>
+    <p>Processing...</p>
+</div>
+
+<div class="analysis-flow" id="analysis_flow">
+    <h3>Analysis Flow Progress</h3>
+    <div class="flow-steps">
+        <div class="flow-step" id="step_pr_list">
+            <div class="step-icon">1</div>
+            <div class="step-content">
+                <h4>Crawl PR List</h4>
+                <p class="step-status">Waiting to start</p>
+                <div class="step-progress-info" style="display: none;">
+                    <div class="progress-detail">
+                        <span class="progress-count">Crawled: <span id="pr_count">0</span> PRs</span>
+                        <span class="progress-time">Time elapsed: <span id="pr_time">0</span>s</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="flow-step" id="step_pr_filter">
+            <div class="step-icon">2</div>
+            <div class="step-content">
+                <h4>PR Filtering</h4>
+                <p class="step-status">Waiting to start</p>
+                <div class="step-progress-info" style="display: none;">
+                    <div class="progress-detail">
+                        <span class="progress-count">Filtered: <span id="filter_count">0</span> PRs</span>
+                        <span class="progress-time">Time elapsed: <span id="filter_time">0</span>s</span>
+                    </div>
+                    <div class="step-progress-bar">
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="filter_progress" style="width: 0%"></div>
+                        </div>
+                        <div class="progress-text" id="filter_progress_text">0%</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="flow-step" id="step_pr_details">
+            <div class="step-icon">3</div>
+            <div class="step-content">
+                <h4>Crawl PR Details</h4>
+                <p class="step-status">Waiting to start</p>
+                <div class="step-progress-info" style="display: none;">
+                    <div class="progress-detail">
+                        <span class="progress-count">Crawled: <span id="details_count">0</span> PR details</span>
+                        <span class="progress-time">Time elapsed: <span id="details_time">0</span>s</span>
+                    </div>
+                    <div class="step-progress-bar">
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="details_progress" style="width: 0%"></div>
+                        </div>
+                        <div class="progress-text" id="details_progress_text">0%</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="flow-step" id="step_code_files">
+            <div class="step-icon">4</div>
+            <div class="step-content">
+                <h4>Fetch Code Files</h4>
+                <p class="step-status">Waiting to start</p>
+                <div class="step-progress-info" style="display: none;">
+                    <div class="progress-detail">
+                        <span class="progress-count">Fetched: <span id="files_count">0</span> files</span>
+                        <span class="progress-time">Time elapsed: <span id="files_time">0</span>s</span>
+                    </div>
+                    <div class="step-progress-bar">
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="files_progress" style="width: 0%"></div>
+                        </div>
+                        <div class="progress-text" id="files_progress_text">0%</div>
+                    </div>
+                    <div class="files-stats" id="files_stats" style="display: none;">
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="flow-step" id="step_function_extract">
+            <div class="step-icon">5</div>
+            <div class="step-content">
+                <h4>Extract Function Code</h4>
+                <p class="step-status">Waiting to start</p>
+                <div class="step-progress-info" style="display: none;">
+                    <div class="progress-detail">
+                        <span class="progress-count">Changed code functions: <span id="extracted_functions">0</span></span>
+                        <span class="progress-time">Time elapsed: <span id="function_time">0</span>s</span>
+                    </div>
+                    <div id="function_stats" style="margin-top: 10px; display: none;">
+                        <div style="font-weight: bold; margin-bottom: 5px;">Agent Category Statistics</div>
+                        <div id="function_stats_content"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="flow-step" id="step_code_generation" style="display: none;">
+            <div class="step-icon">5.5</div>
+            <div class="step-content">
+                <h4>AI Code Generation</h4>
+                <p class="step-status">Waiting to start</p>
+                <div class="step-progress-info" style="display: none;">
+                    <div class="progress-detail">
+                        <span class="progress-count">Generated: <span id="codegen_count">0</span>/<span id="codegen_total">0</span></span>
+                        <span class="progress-time">Time elapsed: <span id="codegen_time">0</span>s</span>
+                    </div>
+                    <div class="step-progress-bar">
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="codegen_progress" style="width: 0%"></div>
+                        </div>
+                        <div class="progress-text" id="codegen_progress_text">0%</div>
+                    </div>
+                    <div id="codegen_stats" style="margin-top: 10px; display: none;">
+                        <div style="font-weight: bold; margin-bottom: 5px;">Agent Category Statistics</div>
+                        <div id="codegen_stats_content"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="flow-step" id="step_deduplication">
+            <div class="step-icon">6</div>
+            <div class="step-content">
+                <h4>Code Deduplication</h4>
+                <p class="step-status">Waiting to start</p>
+                <div class="step-progress-info" style="display: none;">
+                    <div class="progress-detail">
+                        <span class="progress-count">After deduplication: <span id="dedup_remaining">0</span>/<span id="dedup_original">0</span></span>
+                        <span class="progress-time">Time elapsed: <span id="dedup_time">0</span>s</span>
+                    </div>
+                    <div id="dedup_spinner" style="display: none; margin-top: 10px;">
+                        <div class="spinner"></div>
+                        <span style="margin-left: 10px;">Deduplicating...</span>
+                    </div>
+                    <div id="dedup_stats" style="margin-top: 10px; display: none;">
+                        <div style="font-weight: bold; margin-bottom: 5px;">Deduplication Statistics</div>
+                        <div id="dedup_stats_content"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/utils/validation.js') }}"></script>
+<script src="{{ url_for('static', filename='js/components/flowManager.js') }}"></script>
+<script src="{{ url_for('static', filename='js/components/form.js') }}"></script>
+<script src="{{ url_for('static', filename='js/main.js') }}"></script>
+{% endblock %}
