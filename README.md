@@ -61,13 +61,13 @@ After the pipeline, you can train classifiers to distinguish human vs AI-generat
    pip install -r requirements.txt
    ```
 
-4. Configure environment variables (optional):
+4. Configure environment variables:
 
-| Variable           | Description                                                  |
-|--------------------|--------------------------------------------------------------|
-| `GITHUB_TOKEN`     | GitHub personal access token for API requests                |
-| `SECRET_KEY`       | Flask secret key for session management                      |
-| `DEBUG`            | Enable debug mode (`True`/`False`)                           |
+| Variable                     | Description                                                  |
+|------------------------------|--------------------------------------------------------------|
+| `GITHUB_TOKEN` (mandatory)   | GitHub personal access token for API requests                |
+| `SECRET_KEY`                 | Flask secret key for session management                      |
+| `DEBUG`                      | Enable debug mode (`True`/`False`)                           |
 
 5. Start the server
 
